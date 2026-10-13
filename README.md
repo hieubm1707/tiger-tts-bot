@@ -12,7 +12,7 @@ Bot nhận văn bản tiếng Việt, trả về voice message (Tiger-TTS v3 Tur
 | `samples/*.ogg` | Audio thử giọng có sẵn cho lệnh `/test` (tạo bằng `main.py --make-samples` trên Mac) |
 | `.env.example` | Danh sách biến môi trường |
 
-Tài nguyên đo được: thư viện ~240 MB + model ~0.6 GB ≈ **0.85 GB disk**; RAM 1.3–1.75 GB khi tạo giọng.
+Tài nguyên đo được: thư viện ~240 MB + model ~0.6 GB ≈ **0.85 GB disk**; RAM ~1.2 GB khi rảnh, +0.45 GB khi tạo giọng (`CHUNK_CHARS=128`).
 
 ## 1. Tạo bot Telegram
 1. Mở Telegram → chat với **@BotFather** → `/newbot` → đặt tên → nhận **token** dạng `123456:ABC...`.
@@ -84,11 +84,13 @@ Có thể bỏ thêm file `.ogg` (OPUS → voice message) / `.mp3` / `.m4a` / `.
 ## 8. Tuỳ chỉnh tốc độ
 - Console in dòng `🖥️ CPU: ... · VNNI: yes/no` khi khởi động. Nếu `yes`: `VIENEU_PRECISION=int8` → nhanh hơn ~1.6×, RAM ~0.9 GB. Nghe thử, nếu méo tiếng thì quay lại `fp32`.
 - `MAX_CHARS` nhỏ hơn → mỗi lần chờ ít hơn. Bot xử lý **từng yêu cầu một** để không vượt 2 GB RAM.
+- `CHUNK_CHARS` (mặc định 128) = số ký tự tối đa mỗi lần model xử lý; RAM đỉnh tăng theo nó.
+  Đo với file 3 KB: 256 → +1.3 GB (bị kill trên 2 GB), 128 → +0.45 GB, 96 → +0.3 GB. Không ảnh hưởng tốc độ.
 
 ## Xử lý sự cố
 | Triệu chứng | Cách xử lý |
 |---|---|
-| Bot tự restart / `Killed` khi tạo giọng | Thiếu RAM → tăng RAM server lên 2 GB, dùng `int8` nếu CPU có VNNI, giảm `MAX_CHARS` |
+| Bot tự restart khi tạo giọng, Console có `Out of memory: true` | Thiếu RAM → giảm `CHUNK_CHARS` (96), RAM server 2 GB, `int8` nếu CPU có VNNI |
 | `pip install` lỗi mạng / quyền | BotKeep có thể chặn mạng ra ngoài hoặc tự cài `requirements.txt` theo cách khác → xem Console, hỏi support |
 | `No space left on device` khi `pip install ... -r requirements.txt` | Thư mục `.deps` cũ còn sót lại từ lần lỗi → xoá `.deps` (File Manager) rồi Restart. Bot tự cài toàn bộ chỉ khi BotKeep chưa cài requirements |
 | `No space left on device` khi tải model | Tăng storage server (cần ≥ 1.5 GB) |

@@ -81,6 +81,9 @@ THREADS = int(os.getenv("VIENEU_THREADS", "2"))
 PRECISION = os.getenv("VIENEU_PRECISION", "fp32")  # "int8" only if the CPU has VNNI
 MAX_CHARS = int(os.getenv("MAX_CHARS", "600"))
 MAX_FILE_CHARS = int(os.getenv("MAX_FILE_CHARS", "40000"))  # .txt upload; ~35 min of audio
+# Max characters per model chunk (vieneu packs whole sentences up to this). Peak RAM grows with
+# it: a 3 KB file measured +1.3 GB at vieneu's default 256, +0.45 GB at 128, +0.3 GB at 96.
+CHUNK_CHARS = int(os.getenv("CHUNK_CHARS", "128"))
 DEFAULT_VOICE = os.getenv("DEFAULT_VOICE", "Ngọc Huyền")
 ALLOWED_IDS = {int(x) for x in os.getenv("ALLOWED_USER_IDS", "").replace(" ", "").split(",") if x}
 VOICES_DIR = ROOT / "voices"
@@ -148,7 +151,7 @@ def resolve_voice(name: str):
 
 def synthesize_ogg(text: str, voice) -> tuple:
     t0 = time.time()
-    audio = tts.infer(text, voice=voice)
+    audio = tts.infer(text, voice=voice, max_chars=CHUNK_CHARS)
     buf = io.BytesIO()
     sf.write(buf, audio, tts.sample_rate, format="OGG", subtype="OPUS")
     buf.seek(0)
@@ -160,7 +163,7 @@ def synthesize_ogg(text: str, voice) -> tuple:
 
 def synthesize_append(out: sf.SoundFile, text: str, voice) -> float:
     """Synthesize one paragraph and append it (+ a pause) to an open file. Returns seconds written."""
-    audio = tts.infer(text, voice=voice)
+    audio = tts.infer(text, voice=voice, max_chars=CHUNK_CHARS)
     out.write(audio)
     out.write(np.zeros(int(PARA_GAP * tts.sample_rate), dtype=np.float32))
     return len(audio) / tts.sample_rate + PARA_GAP
