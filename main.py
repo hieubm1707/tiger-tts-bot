@@ -66,6 +66,7 @@ import soundfile as sf  # noqa: E402
 from dotenv import load_dotenv  # noqa: E402
 from telegram import Update  # noqa: E402
 from telegram.constants import ChatAction  # noqa: E402
+from telegram.error import TelegramError  # noqa: E402
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters  # noqa: E402
 
 load_dotenv(ROOT / ".env")  # BotKeep manages .env for application profiles
@@ -95,6 +96,8 @@ user_voice: dict = {}      # chat id (str) -> voice name
 synth_lock = asyncio.Lock()  # one synthesis at a time: two in parallel would blow the 2 GB RAM
 file_jobs: set = set()      # chat ids with a .txt job running (one per chat)
 PARA_GAP = 0.5               # seconds of silence between paragraphs of a .txt file
+PROGRESS_EVERY = 15          # seconds between progress edits of a .txt job
+PROGRESS_NOTE = f"Tiến trình sẽ được cập nhật mỗi {PROGRESS_EVERY}s, vui lòng đợi"
 
 
 def load_model() -> None:
@@ -161,6 +164,18 @@ def synthesize_append(out: sf.SoundFile, text: str, voice) -> float:
     out.write(audio)
     out.write(np.zeros(int(PARA_GAP * tts.sample_rate), dtype=np.float32))
     return len(audio) / tts.sample_rate + PARA_GAP
+
+
+def fmt_left(seconds: float) -> str:
+    return f"~{seconds:.0f} giây" if seconds < 60 else f"~{seconds / 60:.0f} phút"
+
+
+async def set_status(status, text: str) -> None:
+    """Progress edits are best-effort: a network hiccup must not kill a long .txt job."""
+    try:
+        await status.edit_text(text)
+    except TelegramError as e:
+        log.warning("Status update failed (job continues): %s", e)
 
 
 def allowed(update: Update) -> bool:
@@ -336,7 +351,8 @@ async def on_document(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     name = user_voice.get(str(chat_id), DEFAULT_VOICE)
     voice = resolve_voice(name) or resolve_voice(DEFAULT_VOICE)
     title = Path(doc.file_name or "audio.txt").stem
-    status = await update.message.reply_text(f"📖 {title}: {len(paras)} đoạn, {total} ký tự. Bắt đầu đọc...")
+    status = await update.message.reply_text(f"📖 {title}: {len(paras)} đoạn, {total} ký tự. Bắt đầu đọc...\n"
+                                             f"{PROGRESS_NOTE}")
     fd, path = tempfile.mkstemp(suffix=".mp3")
     os.close(fd)
     file_jobs.add(chat_id)
@@ -350,18 +366,21 @@ async def on_document(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 async with synth_lock:
                     dur += await asyncio.to_thread(synthesize_append, out, p, voice)
                 done += len(p)
-                if time.time() - last_edit > 15 and i < len(paras):
+                if time.time() - last_edit > PROGRESS_EVERY and i < len(paras):
                     left = (time.time() - t0) / done * (total - done)
-                    await status.edit_text(f"📖 {title}: {i}/{len(paras)} đoạn ({done * 100 // total}%) "
-                                           f"· còn ~{left / 60:.0f} phút")
+                    await set_status(status, f"📖 {title}: {i}/{len(paras)} đoạn ({done * 100 // total}%) "
+                                             f"· còn {fmt_left(left)}\n{PROGRESS_NOTE}")
                     last_edit = time.time()
         gen = time.time() - t0
         log.info("📖 %s: %d chars → %.1fs audio in %.1fs (RTF %.2f)", title, total, dur, gen, gen / dur)
-        await status.edit_text(f"📤 {title}: xong {dur / 60:.1f} phút audio sau {gen / 60:.1f} phút, đang gửi...")
+        await set_status(status, f"📤 {title}: xong {dur / 60:.1f} phút audio sau {gen / 60:.1f} phút, đang gửi...")
         with open(path, "rb") as f:
             await update.message.reply_audio(audio=f, filename=f"{title}.mp3", title=title, performer=name,
                                              duration=int(round(dur)), write_timeout=300)
-        await status.delete()
+        try:
+            await status.delete()
+        except TelegramError:
+            pass  # the MP3 is already sent; a leftover status message is harmless
     except Exception as e:  # keep the bot alive on a bad input
         log.exception("File synthesis failed")
         await update.message.reply_text(f"❌ Lỗi khi đọc file: {e}")
