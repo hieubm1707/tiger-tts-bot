@@ -1,0 +1,7 @@
+.env
+.deps/
+hf_cache/
+user_voices.json
+selftest.ogg
+__pycache__/
+*.zip

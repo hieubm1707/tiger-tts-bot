@@ -1,0 +1,13 @@
+# Runtime deps of vieneu (CPU/ONNX path) WITHOUT gradio/librosa — vieneu itself is
+# installed with --no-deps by main.py. Versions = the set tested on 2026-10-12.
+sea-g2p==0.10.0
+onnxruntime==1.31.0
+numpy==2.5.4
+soundfile==0.14.0
+soxr==1.1.0
+kaldi-native-fbank==1.22.3
+tokenizers==0.23.3
+huggingface-hub==2.2.0
+PyYAML==6.0.3
+python-telegram-bot==22.8
+python-dotenv==1.2.3
