@@ -1,7 +1,20 @@
+# Secrets — set these in BotKeep → Environment instead
 .env
+
+# Python env / installed deps / model cache (installed or downloaded at start-up)
+.venv/
 .deps/
 hf_cache/
+__pycache__/
+.tmp/
+
+# Runtime state and local outputs
 user_voices.json
 selftest.ogg
-__pycache__/
+*.preview.wav
 *.zip
+
+# Local test data
+chuong-*.txt
+
+.DS_Store

@@ -16,7 +16,7 @@ Tài nguyên đo được: thư viện ~240 MB + model ~0.6 GB ≈ **0.85 GB dis
 
 ## 1. Tạo bot Telegram
 1. Mở Telegram → chat với **@BotFather** → `/newbot` → đặt tên → nhận **token** dạng `123456:ABC...`.
-2. Giữ token bí mật (không đưa vào ZIP / GitHub).
+2. Giữ token bí mật (không commit lên GitHub).
 
 ## 2. (Tuỳ chọn) Thêm giọng custom — trên Mac
 ```bash
@@ -34,17 +34,19 @@ cp .env.example .env   # điền TELEGRAM_BOT_TOKEN
 /tmp/botvenv/bin/python main.py
 ```
 
-## 4. Đóng gói ZIP
+## 4. Đẩy source lên GitHub (repo private)
 ```bash
-zip -r vieneu-bot.zip main.py requirements.txt voices/*.npz samples .env.example README.md
+git status            # kiểm tra: KHÔNG có .env, .venv/, .deps/, hf_cache/
+git push
 ```
-Không đưa `.env`, `.deps/`, `hf_cache/` vào ZIP.
+`.gitignore` loại `.env` (token), thư viện, model, file tạm. Repo chỉ ~1.5 MB: code, `voices/*.npz`, `samples/*.ogg`.
+Model (~0.6 GB) không nằm trong repo — bot tự tải khi khởi động lần đầu.
 
 ## 5. Tạo server trên BotKeep
 1. Đăng ký / đăng nhập [botkeep.cloud](https://botkeep.cloud) (Founder Free: đăng ký trước **15/10, 17:00 giờ Ý**).
 2. Tạo server mới → loại **Applications & bots** → runtime **Python 3.12** (hoặc 3.13).
 3. **Tài nguyên: dồn gần hết pool cho server này** — RAM **2 GB** (tối thiểu ~1.8 GB), CPU **1.5 vCore**, storage **≥ 1.5 GB**.
-4. Nguồn: **ZIP upload** → chọn `vieneu-bot.zip` (hoặc GitHub repo private chứa các file trên).
+4. Nguồn: **GitHub** → cấp quyền đọc repo private → chọn repo, nhánh `master`.
 5. Start command: `python main.py`
 6. **Environment** — thêm biến:
    - `TELEGRAM_BOT_TOKEN` = token từ BotFather (đánh dấu **secret/protected**)
@@ -53,10 +55,12 @@ Không đưa `.env`, `.deps/`, `hf_cache/` vào ZIP.
 7. Bấm **Start** → mở **Console**.
 
 ## 6. Lần khởi động đầu (mất vài phút)
+BotKeep tự cài `requirements.txt` (~240 MB) trước dòng `__BOTKEEP_PROCESS_START__`; bot chỉ cài thêm `vieneu`.
 Console sẽ hiện lần lượt:
 ```
-📦 ... pip install ... -r requirements.txt     ← cài thư viện (~240 MB)
-📦 ... pip install ... --no-deps vieneu==3.8.3
+Successfully installed ... (BotKeep cài requirements.txt)
+__BOTKEEP_PROCESS_START__
+📦 ... pip install ... --no-deps vieneu==3.8.3   ← chỉ 4 MB
 ⏳ Loading VieNeu-TTS v3 Turbo (ONNX, fp32, threads=2)...   ← tải model ~0.6 GB lần đầu
 ✅ Model ready in ...s
 🎙️ Custom voices: ngoc_huyen_truyen
@@ -86,7 +90,8 @@ Có thể bỏ thêm file `.ogg` (OPUS → voice message) / `.mp3` / `.m4a` / `.
 |---|---|
 | Bot tự restart / `Killed` khi tạo giọng | Thiếu RAM → tăng RAM server lên 2 GB, dùng `int8` nếu CPU có VNNI, giảm `MAX_CHARS` |
 | `pip install` lỗi mạng / quyền | BotKeep có thể chặn mạng ra ngoài hoặc tự cài `requirements.txt` theo cách khác → xem Console, hỏi support |
-| `No space left on device` | Tăng storage server (cần ≥ 1.5 GB) |
+| `No space left on device` khi `pip install ... -r requirements.txt` | Thư mục `.deps` cũ còn sót lại từ lần lỗi → xoá `.deps` (File Manager) rồi Restart. Bot tự cài toàn bộ chỉ khi BotKeep chưa cài requirements |
+| `No space left on device` khi tải model | Tăng storage server (cần ≥ 1.5 GB) |
 | `Thiếu TELEGRAM_BOT_TOKEN` | Chưa thêm biến trong Environment |
 | `Conflict: terminated by other getUpdates` | Bot đang chạy ở chỗ khác (ví dụ trên Mac) → tắt bản kia |
 | Tiếng méo, rè | Đang dùng `int8` trên CPU không có VNNI → `VIENEU_PRECISION=fp32` |

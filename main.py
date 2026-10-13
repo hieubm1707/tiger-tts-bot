@@ -20,6 +20,10 @@ os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
 # hub 2.x's shared blob store shards files by hash, so a .onnx and its external .data
 # resolve to different dirs and onnxruntime>=1.31 rejects it ("path escapes model directory").
 os.environ.setdefault("HF_HUB_DISABLE_SHARED_BLOBS", "1")
+# BotKeep (Pterodactyl) mounts /tmp as a small tmpfs: pip unpacking there and the .txt → MP3
+# temp files run out of space, so keep temp files on the server disk instead.
+(ROOT / ".tmp").mkdir(exist_ok=True)
+os.environ["TMPDIR"] = str(ROOT / ".tmp")
 
 
 def _pip(*args: str) -> None:
@@ -30,16 +34,20 @@ def _pip(*args: str) -> None:
 
 
 def ensure_deps() -> None:
-    """Install deps once. `vieneu` goes in with --no-deps to skip gradio/librosa (~500 MB)."""
-    try:
-        import vieneu, telegram, dotenv, onnxruntime, sea_g2p  # noqa: F401
-        return
-    except ImportError:
-        pass
-    _pip("-r", str(ROOT / "requirements.txt"))
-    _pip("--no-deps", "vieneu==3.8.3")
+    """Install only what is missing. BotKeep already pip-installs requirements.txt (into
+    ~/.local) before starting us, so there only `vieneu` goes in — with --no-deps, to skip
+    gradio/librosa (~500 MB)."""
     import importlib
-    importlib.invalidate_caches()
+    try:
+        import telegram, dotenv, onnxruntime, sea_g2p  # noqa: F401
+    except ImportError:  # local runs / hosts that don't install requirements.txt themselves
+        _pip("-r", str(ROOT / "requirements.txt"))
+        importlib.invalidate_caches()
+    try:
+        import vieneu  # noqa: F401
+    except ImportError:
+        _pip("--no-deps", "vieneu==3.8.3")
+        importlib.invalidate_caches()
 
 
 ensure_deps()
