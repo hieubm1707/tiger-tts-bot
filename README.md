@@ -1,6 +1,6 @@
-# 🦜 VieNeu-TTS Telegram bot — deploy lên BotKeep
+# 🦜 Tiger-TTS Telegram bot — deploy lên BotKeep
 
-Bot nhận văn bản tiếng Việt, trả về voice message (VieNeu-TTS v3 Turbo, ONNX/CPU, 48 kHz).
+Bot nhận văn bản tiếng Việt, trả về voice message (Tiger-TTS v3 Turbo, ONNX/CPU, 48 kHz).
 Được thiết kế cho gói **BotKeep Founder Free** (2 GB RAM · 1.5 vCore · 2 GB disk).
 
 | File | Vai trò |
@@ -20,7 +20,7 @@ Tài nguyên đo được: thư viện ~240 MB + model ~0.6 GB ≈ **0.85 GB dis
 
 ## 2. (Tuỳ chọn) Thêm giọng custom — trên Mac
 ```bash
-cd ../VieNeu-TTS
+cd ../Tiger-TTS
 uv run python ../vieneu-telegram-bot/make_voice.py /đường/dẫn/clip.wav ten_giong
 ```
 Tạo `voices/ten_giong.npz` (+ file preview `.wav` để nghe thử, không cần upload).
@@ -61,7 +61,7 @@ Console sẽ hiện lần lượt:
 Successfully installed ... (BotKeep cài requirements.txt)
 __BOTKEEP_PROCESS_START__
 📦 ... pip install ... --no-deps vieneu==3.8.3   ← chỉ 4 MB
-⏳ Loading VieNeu-TTS v3 Turbo (ONNX, fp32, threads=2)...   ← tải model ~0.6 GB lần đầu
+⏳ Loading Tiger-TTS v3 Turbo (ONNX, fp32, threads=2)...   ← tải model ~0.6 GB lần đầu
 ✅ Model ready in ...s
 🎙️ Custom voices: ngoc_huyen_truyen
 🤖 Bot polling (allowed users: everyone)

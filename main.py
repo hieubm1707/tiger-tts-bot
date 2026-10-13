@@ -1,4 +1,4 @@
-"""VieNeu-TTS Telegram bot for BotKeep (Founder Free: 2 GB RAM, 1.5 vCore, 2 GB disk).
+"""Tiger-TTS Telegram bot for BotKeep (Founder Free: 2 GB RAM, 1.5 vCore, 2 GB disk).
 
 Start command: python main.py
 Env (BotKeep → Environment): TELEGRAM_BOT_TOKEN (required), see .env.example for the rest.
@@ -53,6 +53,7 @@ def ensure_deps() -> None:
 ensure_deps()
 
 import asyncio  # noqa: E402
+import functools  # noqa: E402
 import io  # noqa: E402
 import json  # noqa: E402
 import tempfile  # noqa: E402
@@ -72,7 +73,7 @@ load_dotenv(ROOT / ".env")  # BotKeep manages .env for application profiles
 logging.basicConfig(format="%(asctime)s %(levelname)s %(name)s: %(message)s", level=logging.INFO)
 for _n in ("httpx", "httpx2", "huggingface_hub"):
     logging.getLogger(_n).setLevel(logging.WARNING)
-log = logging.getLogger("vieneu-bot")
+log = logging.getLogger("tiger-bot")
 
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 THREADS = int(os.getenv("VIENEU_THREADS", "2"))
@@ -106,7 +107,7 @@ def load_model() -> None:
     except OSError:
         pass
     t0 = time.time()
-    log.info("⏳ Loading VieNeu-TTS v3 Turbo (ONNX, %s, threads=%d)...", PRECISION, THREADS)
+    log.info("⏳ Loading Tiger-TTS v3 Turbo (ONNX, %s, threads=%d)...", PRECISION, THREADS)
     tts = Vieneu(threads=THREADS, precision=PRECISION)
     log.info("✅ Model ready in %.1fs", time.time() - t0)
     for f in sorted(VOICES_DIR.glob("*.npz")):
@@ -166,13 +167,30 @@ def allowed(update: Update) -> bool:
     return not ALLOWED_IDS or (update.effective_user and update.effective_user.id in ALLOWED_IDS)
 
 
+def logged(handler):
+    """Log every command: `✅ <user_id> /<command> success in <s>`, or ❌ with the error."""
+    @functools.wraps(handler)
+    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        user = update.effective_user.id if update.effective_user else "?"
+        msg = update.effective_message
+        cmd = (msg.text or "").split(maxsplit=1)[0].split("@")[0] if msg else handler.__name__
+        t0 = time.time()
+        try:
+            await handler(update, context)
+        except Exception as e:
+            log.error("❌ %s %s failed in %.2fs: %s", user, cmd, time.time() - t0, e)
+            raise
+        log.info("✅ %s %s success in %.2fs", user, cmd, time.time() - t0)
+    return wrapper
+
+
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not allowed(update):
         await update.message.reply_text(f"⛔ Bạn chưa được cấp quyền. User ID: {update.effective_user.id}")
         return
     voice = user_voice.get(str(update.effective_chat.id), DEFAULT_VOICE)
     await update.message.reply_text(
-        "🦜 VieNeu-TTS bot\n\n"
+        "🦜 Tiger-TTS bot\n\n"
         "• Gửi văn bản tiếng Việt → nhận voice message.\n"
         "• Gửi file .txt (vd. một chương truyện) → nhận file MP3.\n"
         "• /voices — danh sách giọng\n"
@@ -389,11 +407,11 @@ def main() -> None:
     if resolve_voice(DEFAULT_VOICE) is None:
         sys.exit(f"❌ DEFAULT_VOICE '{DEFAULT_VOICE}' không tồn tại. Có: {all_voice_names()}")
     app = Application.builder().token(TOKEN).concurrent_updates(True).build()
-    app.add_handler(CommandHandler(["start", "help"], cmd_start))
-    app.add_handler(CommandHandler("id", cmd_id))
-    app.add_handler(CommandHandler("voices", cmd_voices))
-    app.add_handler(CommandHandler("voice", cmd_voice))
-    app.add_handler(CommandHandler("test", cmd_test))
+    app.add_handler(CommandHandler(["start", "help"], logged(cmd_start)))
+    app.add_handler(CommandHandler("id", logged(cmd_id)))
+    app.add_handler(CommandHandler("voices", logged(cmd_voices)))
+    app.add_handler(CommandHandler("voice", logged(cmd_voice)))
+    app.add_handler(CommandHandler("test", logged(cmd_test)))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
     app.add_handler(MessageHandler(filters.Document.TXT | filters.Document.FileExtension("txt"), on_document))
     log.info("🤖 Bot polling (allowed users: %s)", sorted(ALLOWED_IDS) or "everyone")
