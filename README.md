@@ -1,99 +1,84 @@
-# 🦜 Tiger-TTS Telegram bot — deploy lên BotKeep
+# 🦜 Tiger-TTS Telegram bot
 
 Bot nhận văn bản tiếng Việt, trả về voice message (Tiger-TTS v3 Turbo, ONNX/CPU, 48 kHz).
-Được thiết kế cho gói **BotKeep Founder Free** (2 GB RAM · 1.5 vCore · 2 GB disk).
+Chạy được trên máy chỉ có CPU, khoảng 2 GB RAM.
 
 | File | Vai trò |
 |---|---|
-| `main.py` | Bot. Lần chạy đầu tự cài thư viện vào `./.deps` và tải model vào `./hf_cache` |
+| `main.py` | Bot. Lần chạy đầu tự cài thư viện còn thiếu vào `./.deps` và tải model vào `./hf_cache` |
 | `requirements.txt` | Thư viện tối giản (không gradio/librosa/torch) |
-| `voices/*.npz` | Giọng custom đã mã hoá sẵn (tạo bằng `make_voice.py` trên Mac) |
-| `make_voice.py` | Chạy **trên Mac**: clip 3–8 s → `voices/<tên>.npz` |
-| `samples/*.ogg` | Audio thử giọng có sẵn cho lệnh `/test` (tạo bằng `main.py --make-samples` trên Mac) |
+| `voices/*.npz` | Giọng custom đã mã hoá sẵn (tạo bằng `make_voice.py`) |
+| `make_voice.py` | Clip 3–8 s → `voices/<tên>.npz` |
+| `samples/*.ogg` | Audio thử giọng có sẵn cho lệnh `/test` (tạo bằng `main.py --make-samples`) |
 | `.env.example` | Danh sách biến môi trường |
 
 Tài nguyên đo được: thư viện ~240 MB + model ~0.6 GB ≈ **0.85 GB disk**; RAM ~1.2 GB khi rảnh, +0.45 GB khi tạo giọng (`CHUNK_CHARS=128`).
 
 ## 1. Tạo bot Telegram
 1. Mở Telegram → chat với **@BotFather** → `/newbot` → đặt tên → nhận **token** dạng `123456:ABC...`.
-2. Giữ token bí mật (không commit lên GitHub).
+2. Giữ token bí mật (không commit lên GitHub — `.env` đã nằm trong `.gitignore`).
 
-## 2. (Tuỳ chọn) Thêm giọng custom — trên Mac
+## 2. (Tuỳ chọn) Thêm giọng custom
 ```bash
 cd ../Tiger-TTS
 uv run python ../vieneu-telegram-bot/make_voice.py /đường/dẫn/clip.wav ten_giong
 ```
-Tạo `voices/ten_giong.npz` (+ file preview `.wav` để nghe thử, không cần upload).
-**Không clone trên BotKeep** — bước này cần ~2.1 GB RAM.
+Tạo `voices/ten_giong.npz` (+ file preview `.wav` để nghe thử, không cần commit).
+Bước này cần ~2.1 GB RAM — nên chạy trên máy cá nhân, không chạy trên server nhỏ.
 
-## 3. Thử trên Mac (tuỳ chọn)
+## 3. Chạy bot
 ```bash
-python3.12 -m venv /tmp/botvenv && /tmp/botvenv/bin/python main.py --selftest   # tạo selftest.ogg
-/tmp/botvenv/bin/python main.py --make-samples   # samples/<giọng>.ogg cho /test (~1 phút, ~1 MB)
-cp .env.example .env   # điền TELEGRAM_BOT_TOKEN
-/tmp/botvenv/bin/python main.py
+python3.12 -m venv .venv
+.venv/bin/python main.py --selftest       # tạo selftest.ogg, không cần Telegram
+.venv/bin/python main.py --make-samples   # samples/<giọng>.ogg cho /test (~1 phút, ~1 MB)
+cp .env.example .env                      # điền TELEGRAM_BOT_TOKEN
+.venv/bin/python main.py
 ```
-
-## 4. Đẩy source lên GitHub (repo private)
-```bash
-git status            # kiểm tra: KHÔNG có .env, .venv/, .deps/, hf_cache/
-git push
+Lần chạy đầu mất vài phút (cài thư viện ~240 MB, tải model ~0.6 GB); những lần sau bỏ qua. Log khởi động:
 ```
-`.gitignore` loại `.env` (token), thư viện, model, file tạm. Repo chỉ ~1.5 MB: code, `voices/*.npz`, `samples/*.ogg`.
-Model (~0.6 GB) không nằm trong repo — bot tự tải khi khởi động lần đầu.
-
-## 5. Tạo server trên BotKeep
-1. Đăng ký / đăng nhập [botkeep.cloud](https://botkeep.cloud) (Founder Free: đăng ký trước **15/10, 17:00 giờ Ý**).
-2. Tạo server mới → loại **Applications & bots** → runtime **Python 3.12** (hoặc 3.13).
-3. **Tài nguyên: dồn gần hết pool cho server này** — RAM **2 GB** (tối thiểu ~1.8 GB), CPU **1.5 vCore**, storage **≥ 1.5 GB**.
-4. Nguồn: **GitHub** → cấp quyền đọc repo private → chọn repo, nhánh `master`.
-5. Start command: `python main.py`
-6. **Environment** — thêm biến:
-   - `TELEGRAM_BOT_TOKEN` = token từ BotFather (đánh dấu **secret/protected**)
-   - `ALLOWED_USER_IDS` = user ID của bạn (lấy bằng `/id` ở bước 7; để trống lúc đầu)
-   - Tuỳ chọn: `DEFAULT_VOICE`, `MAX_CHARS`, `MAX_FILE_CHARS`, `VIENEU_THREADS`, `VIENEU_PRECISION` (xem `.env.example`)
-7. Bấm **Start** → mở **Console**.
-
-## 6. Lần khởi động đầu (mất vài phút)
-BotKeep tự cài `requirements.txt` (~240 MB) trước dòng `__BOTKEEP_PROCESS_START__`; bot chỉ cài thêm `vieneu`.
-Console sẽ hiện lần lượt:
-```
-Successfully installed ... (BotKeep cài requirements.txt)
-__BOTKEEP_PROCESS_START__
-📦 ... pip install ... --no-deps vieneu==3.8.3   ← chỉ 4 MB
-⏳ Loading Tiger-TTS v3 Turbo (ONNX, fp32, threads=2)...   ← tải model ~0.6 GB lần đầu
+⏳ Loading Tiger-TTS v3 Turbo (ONNX, fp32, threads=2)...
 ✅ Model ready in ...s
 🎙️ Custom voices: ngoc_huyen_truyen
 🤖 Bot polling (allowed users: everyone)
 ```
-Những lần sau bỏ qua cài đặt và tải model.
+Mỗi command được ghi log dạng `✅ <user_id> /<command> success in <giây>`.
 
-## 7. Dùng và khoá bot
+## 4. Cấu hình (`.env` hoặc biến môi trường)
+| Biến | Mặc định | Ý nghĩa |
+|---|---|---|
+| `TELEGRAM_BOT_TOKEN` | — | **Bắt buộc**. Token từ BotFather |
+| `ALLOWED_USER_IDS` | trống = mọi người | User ID được dùng bot, cách nhau dấu phẩy (lấy bằng `/id`) |
+| `DEFAULT_VOICE` | `Ngọc Huyền` | Giọng mặc định |
+| `MAX_CHARS` | `600` | Số ký tự tối đa mỗi tin nhắn |
+| `MAX_FILE_CHARS` | `40000` | Số ký tự tối đa mỗi file `.txt` (~35 phút audio) |
+| `CHUNK_CHARS` | `128` | Số ký tự tối đa mỗi lần model xử lý — quyết định RAM đỉnh |
+| `VIENEU_THREADS` | `2` | Số luồng CPU cho model |
+| `VIENEU_PRECISION` | `fp32` | `int8` chỉ khi CPU có VNNI |
+
+## 5. Dùng và khoá bot
 1. Trong Telegram mở bot → `/start` → gửi một câu → nhận voice message.
-2. Gửi `/id` → copy user ID → BotKeep **Environment** → `ALLOWED_USER_IDS=<id>` (nhiều người: `id1,id2`) → **Restart**.
+2. Gửi `/id` → đặt `ALLOWED_USER_IDS=<id>` (nhiều người: `id1,id2`) → khởi động lại bot.
    Nên làm ngay — bot công khai ai cũng dùng được và sẽ chiếm hết CPU.
 
-Gửi **file `.txt`** (vd. một chương truyện) → bot đọc từng đoạn, báo tiến độ, trả về 1 file MP3. Một chương ~14.000 ký tự ≈ 13 phút audio, ~7 MB; trên Mac M (2 threads) mất 5 phút, trên BotKeep lâu hơn (xem RTF trong Console). Giới hạn: `MAX_FILE_CHARS` (mặc định 40000).
+Gửi **file `.txt`** (vd. một chương truyện) → bot đọc từng đoạn, cập nhật tiến trình mỗi 15 giây (% và thời gian còn lại), trả về 1 file MP3. Một chương ~14.000 ký tự ≈ 13 phút audio, ~7 MB; trên Mac M (2 threads) mất 5 phút, CPU server yếu hơn sẽ lâu hơn (xem RTF trong log). Giới hạn: `MAX_FILE_CHARS`.
 
 Lệnh: `/voices` (danh sách giọng) · `/voice Mai Anh` (đổi giọng) · `/voice ngoc_huyen_truyen` (giọng custom).
 
-`/test` — nghe audio thử giọng có sẵn trong `samples/` (gửi file sẵn, **không tốn CPU** của server):
+`/test` — nghe audio thử giọng có sẵn trong `samples/` (gửi file sẵn, **không tốn CPU**):
 `/test` (danh sách) · `/test 3` hoặc `/test Mai Anh` (một clip; gõ một phần tên như `/test đức` → mọi giọng khớp) · `/test all` (tất cả).
 Có thể bỏ thêm file `.ogg` (OPUS → voice message) / `.mp3` / `.m4a` / `.wav` bất kỳ vào `samples/`. Xoá một clip rồi chạy lại `--make-samples` để tạo lại.
 
-## 8. Tuỳ chỉnh tốc độ
-- Console in dòng `🖥️ CPU: ... · VNNI: yes/no` khi khởi động. Nếu `yes`: `VIENEU_PRECISION=int8` → nhanh hơn ~1.6×, RAM ~0.9 GB. Nghe thử, nếu méo tiếng thì quay lại `fp32`.
-- `MAX_CHARS` nhỏ hơn → mỗi lần chờ ít hơn. Bot xử lý **từng yêu cầu một** để không vượt 2 GB RAM.
-- `CHUNK_CHARS` (mặc định 128) = số ký tự tối đa mỗi lần model xử lý; RAM đỉnh tăng theo nó.
-  Đo với file 3 KB: 256 → +1.3 GB (bị kill trên 2 GB), 128 → +0.45 GB, 96 → +0.3 GB. Không ảnh hưởng tốc độ.
+## 6. Tuỳ chỉnh tốc độ và RAM
+- Log khởi động in `🖥️ CPU: ... · VNNI: yes/no` (trên Linux). Nếu `yes`: `VIENEU_PRECISION=int8` → nhanh hơn ~1.6×, RAM ~0.9 GB. Nghe thử, nếu méo tiếng thì quay lại `fp32`.
+- `MAX_CHARS` nhỏ hơn → mỗi lần chờ ít hơn. Bot xử lý **từng yêu cầu một** để không vượt RAM.
+- `CHUNK_CHARS`: RAM đỉnh tăng theo nó. Đo với file 3 KB: 256 → +1.3 GB (bị kill trên máy 2 GB), 128 → +0.45 GB, 96 → +0.3 GB. Không ảnh hưởng tốc độ.
+- `VIENEU_THREADS=1` không giảm RAM, chỉ chậm hơn (~35%).
 
 ## Xử lý sự cố
 | Triệu chứng | Cách xử lý |
 |---|---|
-| Bot tự restart khi tạo giọng, Console có `Out of memory: true` | Thiếu RAM → giảm `CHUNK_CHARS` (96), RAM server 2 GB, `int8` nếu CPU có VNNI |
-| `pip install` lỗi mạng / quyền | BotKeep có thể chặn mạng ra ngoài hoặc tự cài `requirements.txt` theo cách khác → xem Console, hỏi support |
-| `No space left on device` khi `pip install ... -r requirements.txt` | Thư mục `.deps` cũ còn sót lại từ lần lỗi → xoá `.deps` (File Manager) rồi Restart. Bot tự cài toàn bộ chỉ khi BotKeep chưa cài requirements |
-| `No space left on device` khi tải model | Tăng storage server (cần ≥ 1.5 GB) |
-| `Thiếu TELEGRAM_BOT_TOKEN` | Chưa thêm biến trong Environment |
-| `Conflict: terminated by other getUpdates` | Bot đang chạy ở chỗ khác (ví dụ trên Mac) → tắt bản kia |
+| Bot bị kill / tự restart khi tạo giọng (hết RAM) | Giảm `CHUNK_CHARS` (96); trên Linux thêm `MALLOC_ARENA_MAX=2`; `int8` nếu CPU có VNNI |
+| `No space left on device` | Cần ≥ 1.5 GB disk trống cho thư viện + model |
+| `Thiếu TELEGRAM_BOT_TOKEN` | Chưa đặt biến trong `.env` / môi trường |
+| `Conflict: terminated by other getUpdates` | Bot đang chạy ở chỗ khác với cùng token → tắt bản kia, hoặc `/revoke` token ở BotFather |
 | Tiếng méo, rè | Đang dùng `int8` trên CPU không có VNNI → `VIENEU_PRECISION=fp32` |
