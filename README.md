@@ -9,7 +9,6 @@ Chạy được trên máy chỉ có CPU, khoảng 2 GB RAM.
 | `requirements.txt` | Thư viện tối giản (không gradio/librosa/torch) |
 | `voices/*.npz` | Giọng custom đã mã hoá sẵn (tạo bằng `make_voice.py`) |
 | `make_voice.py` | Clip 3–8 s → `voices/<tên>.npz` |
-| `samples/*.ogg` | Audio thử giọng có sẵn cho lệnh `/test` (tạo bằng `main.py --make-samples`) |
 | `.env.example` | Danh sách biến môi trường |
 
 Tài nguyên đo được: thư viện ~240 MB + model ~0.6 GB ≈ **0.85 GB disk**; RAM ~1.2 GB khi rảnh, +0.45 GB khi tạo giọng (`CHUNK_CHARS=128`).
@@ -30,7 +29,6 @@ Bước này cần ~2.1 GB RAM — nên chạy trên máy cá nhân, không ch�
 ```bash
 python3.12 -m venv .venv
 .venv/bin/python main.py --selftest       # tạo selftest.ogg, không cần Telegram
-.venv/bin/python main.py --make-samples   # samples/<giọng>.ogg cho /test (~1 phút, ~1 MB)
 cp .env.example .env                      # điền TELEGRAM_BOT_TOKEN
 .venv/bin/python main.py
 ```
@@ -64,9 +62,8 @@ Gửi **file `.txt`** (vd. một chương truyện) → bot đọc từng đoạ
 
 Lệnh: `/voices` (danh sách giọng) · `/voice Mai Anh` (đổi giọng) · `/voice ngoc_huyen_truyen` (giọng custom).
 
-`/test` — nghe audio thử giọng có sẵn trong `samples/` (gửi file sẵn, **không tốn CPU**):
-`/test` (danh sách) · `/test 3` hoặc `/test Mai Anh` (một clip; gõ một phần tên như `/test đức` → mọi giọng khớp) · `/test all` (tất cả).
-Có thể bỏ thêm file `.ogg` (OPUS → voice message) / `.mp3` / `.m4a` / `.wav` bất kỳ vào `samples/`. Xoá một clip rồi chạy lại `--make-samples` để tạo lại.
+`/test` — nghe thử một giọng: bot đọc một câu mẫu ngắn (~4 giây audio) bằng giọng đó, không đổi giọng đang dùng.
+`/test` (danh sách giọng, có số) · `/test 3` hoặc `/test Mai Anh` · gõ một phần tên như `/test trân` cũng được; nếu khớp nhiều giọng, bot liệt kê để chọn.
 
 ## 6. Tuỳ chỉnh tốc độ và RAM
 - Log khởi động in `🖥️ CPU: ... · VNNI: yes/no` (trên Linux). Nếu `yes`: `VIENEU_PRECISION=int8` → nhanh hơn ~1.6×, RAM ~0.9 GB. Nghe thử, nếu méo tiếng thì quay lại `fp32`.

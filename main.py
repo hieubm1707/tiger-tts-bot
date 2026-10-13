@@ -88,10 +88,7 @@ DEFAULT_VOICE = os.getenv("DEFAULT_VOICE", "Ngọc Huyền")
 ALLOWED_IDS = {int(x) for x in os.getenv("ALLOWED_USER_IDS", "").replace(" ", "").split(",") if x}
 VOICES_DIR = ROOT / "voices"
 PREFS_FILE = ROOT / "user_voices.json"
-SAMPLES_DIR = ROOT / "samples"  # ready-made test clips for /test (python main.py --make-samples)
-SAMPLE_EXTS = {".ogg", ".mp3", ".m4a", ".wav"}
-SAMPLE_TEXT = ("Xin chào, đây là đoạn audio thử giọng. Hôm nay trời đẹp, "
-               "mình cùng nghe một câu chuyện ngắn nhé.")
+SAMPLE_TEXT = "Xin chào, đây là đoạn thử giọng. Chúc bạn nghe truyện vui vẻ."  # for /test
 
 tts = None
 custom_voices: dict = {}   # name -> {"speaker_emb", "codes"} from voices/*.npz
@@ -213,7 +210,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "• Gửi file .txt (vd. một chương truyện) → nhận file MP3.\n"
         "• /voices — danh sách giọng\n"
         "• /voice <tên> — đổi giọng, ví dụ: /voice Mai Anh\n"
-        "• /test — nghe các đoạn audio thử giọng có sẵn\n"
+        "• /test <tên> — nghe thử một giọng bằng câu mẫu ngắn\n"
         "• /id — xem user ID\n\n"
         f"Giọng hiện tại: {voice} · Tối đa {MAX_CHARS} ký tự/lần."
     )
@@ -247,61 +244,46 @@ async def cmd_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(f"✅ Đã chọn giọng: {name}")
 
 
-def nfc(s: str) -> str:  # file names may come back NFD (macOS, zip), typed text is NFC
+def nfc(s: str) -> str:  # macOS/iOS keyboards can send NFD, voice names are NFC
     return unicodedata.normalize("NFC", s)
 
 
-def list_samples() -> list:
-    """Clips in samples/, in /voices order first, then any other files by name."""
-    order = {n: i for i, n in enumerate(all_voice_names())}
-    files = [p for p in SAMPLES_DIR.glob("*") if p.suffix.lower() in SAMPLE_EXTS]
-    return sorted(files, key=lambda p: (order.get(nfc(p.stem), len(order)), p.name))
-
-
-async def send_sample(update: Update, path: Path) -> None:
-    """OGG/OPUS goes out as a voice message, anything else as an audio file."""
-    try:
-        info = sf.info(str(path))
-        dur, as_voice = int(round(info.duration)), info.format == "OGG" and info.subtype == "OPUS"
-    except RuntimeError:  # format libsndfile can't read (e.g. .m4a): still send it
-        dur, as_voice = None, False
-    with open(path, "rb") as f:
-        if as_voice:
-            await update.message.reply_voice(voice=f, duration=dur, caption=f"🎧 {nfc(path.stem)}")
-        else:
-            await update.message.reply_audio(audio=f, duration=dur, title=nfc(path.stem), filename=path.name)
-
-
 async def cmd_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """/test lists samples/, /test <số|tên> plays one, /test all plays every clip. No synthesis."""
+    """/test lists the voices, /test <số|tên> reads SAMPLE_TEXT with that voice."""
     if not allowed(update):
         return
-    samples = list_samples()
-    if not samples:
-        await update.message.reply_text("📭 Chưa có audio test trong samples/. "
-                                        "Tạo trên Mac: python main.py --make-samples")
-        return
+    names = all_voice_names()
     arg = " ".join(context.args).strip()
     if not arg:
-        lines = [f"{i}. {nfc(p.stem)}" for i, p in enumerate(samples, 1)]
-        await update.message.reply_text("🎧 Audio test có sẵn:\n" + "\n".join(lines)
-                                        + "\n\nNghe: /test <số hoặc tên> · /test all")
+        lines = [f"{i}. {n}" for i, n in enumerate(names, 1)]
+        await update.message.reply_text("🎧 Nghe thử giọng:\n" + "\n".join(lines)
+                                        + "\n\nDùng: /test <số hoặc tên>, ví dụ /test 3 hoặc /test Mai Anh")
         return
-    if arg.lower() == "all":
-        picked = samples
-    elif arg.isdigit() and 1 <= int(arg) <= len(samples):
-        picked = [samples[int(arg) - 1]]
+    if arg.isdigit() and 1 <= int(arg) <= len(names):
+        picked = [names[int(arg) - 1]]
     else:
         key = nfc(arg).casefold()
-        picked = ([p for p in samples if nfc(p.stem).casefold() == key]
-                  or [p for p in samples if key in nfc(p.stem).casefold()])
+        picked = ([n for n in names if n.casefold() == key]
+                  or [n for n in names if key in n.casefold()])
     if not picked:
-        await update.message.reply_text(f"❌ Không có audio test '{arg}'. Xem /test")
+        await update.message.reply_text(f"❌ Không có giọng '{arg}'. Xem /test")
         return
-    for i, p in enumerate(picked):
-        if i:
-            await asyncio.sleep(1)  # stay under Telegram's ~1 msg/s per chat limit
-        await send_sample(update, p)
+    if len(picked) > 1:
+        await update.message.reply_text(f"🔎 Có {len(picked)} giọng khớp '{arg}':\n" + "\n".join(picked)
+                                        + "\n\nGõ tên đầy đủ, ví dụ /test " + picked[0])
+        return
+    name = picked[0]
+    if synth_lock.locked():
+        await update.message.reply_text("⏳ Đang xử lý yêu cầu khác, bạn chờ chút nhé...")
+    async with synth_lock:
+        await update.effective_chat.send_action(ChatAction.RECORD_VOICE)
+        try:
+            buf, dur = await asyncio.to_thread(synthesize_ogg, SAMPLE_TEXT, resolve_voice(name))
+        except Exception as e:
+            log.exception("Test synthesis failed")
+            await update.message.reply_text(f"❌ Lỗi khi tạo giọng: {e}")
+            return
+    await update.message.reply_voice(voice=buf, duration=int(round(dur)), caption=f"🎧 {name}")
 
 
 async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -401,26 +383,9 @@ def selftest() -> None:
     print(f"✅ selftest.ogg ({dur:.1f}s) — voices: {', '.join(all_voice_names()[:8])}...")
 
 
-def make_samples() -> None:
-    """`python main.py --make-samples`: one test clip per voice into samples/ for /test.
-    Existing clips are kept, so delete one to regenerate it."""
-    load_model()
-    SAMPLES_DIR.mkdir(exist_ok=True)
-    for name in all_voice_names():
-        out = SAMPLES_DIR / f"{name.replace('/', '_')}.ogg"
-        if out.exists():
-            continue
-        buf, dur = synthesize_ogg(SAMPLE_TEXT, resolve_voice(name))
-        out.write_bytes(buf.getvalue())
-        print(f"✅ {out.relative_to(ROOT)} ({dur:.1f}s)")
-
-
 def main() -> None:
     if "--selftest" in sys.argv:
         selftest()
-        return
-    if "--make-samples" in sys.argv:
-        make_samples()
         return
     if not TOKEN:
         sys.exit("❌ Thiếu TELEGRAM_BOT_TOKEN (BotKeep → Environment).")
